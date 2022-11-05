@@ -1,0 +1,10 @@
+# share
+.idea/
+.vscode/
+
+# Dependency directories
+node_modules/
+
+# test
+.nyc_output/*
+coverage/*

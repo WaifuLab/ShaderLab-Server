@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+const { styles } = require("../utils/style");
+const { stdout } = require("node:process");
+stdout.write(styles.bold("             _                                                             _                \n" +
+                            "           /' `\\     /'                      /'                          /~_)             /'\n" +
+                            "         /'   ._)  /'                      /'                        ~-/'-~             /'  \n" +
+                            "        (____    /'__     ____     _____,/' ____      ____           /'      ____     /'__  \n" +
+                            "             ) /'    )  /'    )  /'    /' /'    )   )'    )--      /'      /'    )  /'    ) \n" +
+                            "           /'/'    /' /'    /' /'    /' /(___,/'  /'          /~\\,'   _  /'    /' /'    /' \n" +
+                            "  (_____,/'/'    /(__(___,/(__(___,/(__(________/'           (,/'`\\____)(___,/(__(___,/(__ \n\n"));
+
+const debug = require("debug")("shaderlab:server");
+const { executeOption, serverMode, resolveProxy, clusterConfig } = require("../config/server.js");
+const { createServer } = require("node:http");
+
+if (serverMode !== executeOption.cluster) {
+    const app = require("../app.js");
+
+    const port = normalizePort(process.env.PORT || "3000");
+
+    // Create HTTP server.
+    let server = createServer(app.callback());
+
+    // Listen on provided port, on all network interfaces.
+    server.listen(port);
+    server.on("error", onError(port));
+    server.on("listening", onListening(server));
+} else {
+    const app = require("../app.js");
+
+    const port = normalizePort(process.env.PORT || "3000");
+
+    // Create HTTP server.
+    const proxy = require("../plugins/proxy")();
+    const server = createServer((req, res) => proxy.web(req, res, { target: resolveProxy(req, clusterConfig.rules) }));
+
+    // Listen on provided port, on all network interfaces.
+    server.listen(port);
+    server.on("error", onError(port));
+    server.on("listening", onListening(server));
+}
+
+/**
+ * Normalize a port into a number, string, or false.
+ * @param {string|number} val
+ * @return {number}
+ */
+function normalizePort(val) {
+    let port = parseInt(val, 10);
+    return isNaN(port) ? val : port >= 0 ? port : false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ * @param {number} port
+ * @return {function}
+ */
+function onError(port) {
+    let bind = typeof port == "string" ? "Pipe " + port : "Port " + port;
+    return error => {
+        if (error.syscall !== "listen") throw error;
+        // handle specific listen errors with friendly messages
+        switch (error.code) {
+            case "EACCES":
+                debug("%s requires elevated privileges", bind);
+                process.exit(1);
+                break;
+            case "EADDRINUSE":
+                debug("%s is already in use", bind);
+                process.exit(1);
+                break;
+            default:
+                throw error;
+        }
+    }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ * @param server
+ */
+function onListening(server) {
+    let addr = server.address(),
+        bind = typeof addr == "string" ? "pipe " + addr : "port " + addr.port;
+    return () => { debug("listening on %s", bind); }
+}

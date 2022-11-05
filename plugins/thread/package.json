@@ -1,0 +1,9 @@
+{
+    "name": "thread",
+    "version": "1.0.0",
+    "dependencies": {
+        "debug": "latest",
+        "json-socket": "latest",
+        "minimist": "latest"
+    }
+}

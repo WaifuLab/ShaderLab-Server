@@ -1,0 +1,26 @@
+{
+    "name": "express",
+    "version": "1.0.0",
+    "main": "index.js",
+    "dependencies": {
+        "accepts": "latest",
+        "compressible": "latest",
+        "content-disposition": "latest",
+        "content-type": "latest",
+        "cookies": "latest",
+        "debug": "latest",
+        "destroy": "latest",
+        "fresh": "latest",
+        "http-errors": "latest",
+        "mime-types": "latest",
+        "on-finished": "latest",
+        "on-headers": "latest",
+        "parseurl": "latest",
+        "path-to-regexp": "latest",
+        "resolve-path": "latest",
+        "statuses": "latest",
+        "type-is": "latest",
+        "vary": "latest",
+        "ylru": "latest"
+    }
+}

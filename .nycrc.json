@@ -1,0 +1,12 @@
+{
+  "reporter": [
+    "html",
+    "text"
+  ],
+  "exclude": [
+    "coverage/**",
+    "packages/*/test{,s}/**",
+    "**/*.d.ts",
+    "test{,s}/**"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "shaderlab-server",
+    "version": "1.0.0",
+    "dependencies": {
+        "analyzer": "file:./plugins/analyzer",
+        "express": "file:./plugins/express",
+        "thread": "file:./plugins/thread",
+        "proxy": "file:./plugins/proxy"
+    },
+    "devDependencies": {
+        "cross-env": "latest",
+        "favicons": "latest",
+        "mocha": "latest",
+        "nyc": "latest",
+        "supertest": "latest"
+    },
+    "scripts": {
+        "run": "cross-env NODE_ENV=production DEBUG=shaderlab:* node bin/www",
+        "dev": "cross-env NODE_ENV=development DEBUG=shaderlab:* node bin/www",
+        "test": "nyc --reporter=html --reporter=text mocha test/*.js --exit"
+    }
+}
