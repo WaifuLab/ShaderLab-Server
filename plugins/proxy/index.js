@@ -19,16 +19,17 @@ class ProxyServer extends EventEmitter {
     }
 
     listen(port, hostname) {
-        const closure = (req, res) => this.web(req, res);
+        const self = this, closure = (req, res) => this.web(req, res);
         this._server  = this.options.ssl ? https.createServer(this.options.ssl, closure) : http.createServer(closure);
         if(this.options.ws)
-            this._server.on("upgrade", (req, socket, head) => this.ws(req, socket, head));
+            this._server.on("upgrade", (req, socket, head) => self.ws(req, socket, head));
         this._server.listen(port, hostname);
         return this;
     }
 
     close(callback) {
-        if (this._server) this._server.close(done);
+        const self = this;
+        if (this._server) self._server.close(done);
 
         // Wrap callback to nullify server after all open connections are closed.
         function done() {
@@ -73,25 +74,26 @@ function createRightProxy(type) {
             const args = [].slice.call(arguments);
             let cntr = args.length - 1, head, cbl;
             /* optional args parse begin */
-            if(typeof args[cntr] === "function") {
+            if (typeof args[cntr] === "function") {
                 cbl = args[cntr];
                 cntr--;
             }
             let requestOptions = options;
-            if(!(args[cntr] instanceof Buffer) && args[cntr] !== res) {
+            if (!(args[cntr] instanceof Buffer) && args[cntr] !== res) {
                 requestOptions = Object.assign({}, options);
                 Object.assign(requestOptions, args[cntr]);
                 cntr--;
             }
-            if(args[cntr] instanceof Buffer) head = args[cntr];
+            if (args[cntr] instanceof Buffer) head = args[cntr];
             ["target", "forward"].forEach(e => {
                 if (typeof requestOptions[e] === "string")
                     requestOptions[e] = parse(requestOptions[e]);
             });
             if (!requestOptions.target && !requestOptions.forward)
                 return this.emit("error", new Error("Must provide a proper URL as target"));
-            for(let i=0; i < passes.length; i++) {
-                if(passes[i](req, res, requestOptions, head, this, cbl)) break;
+            for (let i = 0; i < passes.length; i++) {
+                if (passes[i](req, res, requestOptions, head, this, cbl))
+                    break;
             }
         };
     };

@@ -1,8 +1,11 @@
 const httpProxy = require("../plugins/proxy");
+const ws = require("ws");
 const assert = require("node:assert");
+const https = require("node:https");
 const http = require("node:http");
+const path = require("node:path");
 const url = require("node:url");
-const wsPasses = require("proxy/ws.in");
+const fs = require("node:fs");
 
 describe("Proxy test", () => {
     describe("http proxy module test", () => {
@@ -41,24 +44,24 @@ describe("Proxy test", () => {
                 //    let proxy = httpProxy({ target: `http://localhost:${ports.source}` }).listen(ports.proxy);
                 //    const source = http.createServer();
                 //});
-                //it("should make the request on pipe and finish it", done => {
-                //    const ports = { source: gen.port, proxy: gen.port };
-                //    let proxy = httpProxy({ target: `http://localhost:${ports.source}` }).listen(ports.proxy);
-                //    const source = http.createServer((req, res) => {
-                //        assert.strictEqual(req.method, "POST");
-                //        assert.strictEqual(req.headers["x-forwarded-for"], "127.0.0.1");
-                //        assert.equal(req.headers.host.split(":")[1], ports.proxy);
-                //        source.close();
-                //        proxy.close();
-                //        done();
-                //    }).listen(ports.source);
-                //    http.request({
-                //        hostname: "127.0.0.1",
-                //        port: ports.proxy,
-                //        method: "POST",
-                //        headers: { "x-forwarded-for": "127.0.0.1" }
-                //    }, () => {}).end();
-                //});
+                it("should make the request on pipe and finish it", done => {
+                    const ports = { source: gen.port, proxy: gen.port };
+                    let proxy = httpProxy({ target: `http://localhost:${ports.source}` }).listen(ports.proxy);
+                    const source = http.createServer((req, res) => {
+                        assert.strictEqual(req.method, "POST");
+                        assert.strictEqual(req.headers["x-forwarded-for"], "127.0.0.1");
+                        assert.equal(req.headers.host.split(":")[1], ports.proxy);
+                        source.close();
+                        proxy.close();
+                        done();
+                    }).listen(ports.source);
+                    http.request({
+                        hostname: "127.0.0.1",
+                        port: ports.proxy,
+                        method: "POST",
+                        headers: { "x-forwarded-for": "127.0.0.1" }
+                    }, () => {}).end();
+                });
             });
             describe("with error response", () => {
                 it("should make the request and emit the error event", done => {
@@ -66,7 +69,7 @@ describe("Proxy test", () => {
                     const proxy = httpProxy({ target: `http://127.0.0.1:${ports.source}` });
                     proxy.on("error", err => {
                         assert.ok(err instanceof Error);
-                        assert.strictEqual(err.code, "ECONNRESET");
+                        assert.strictEqual(err.code, "ECONNREFUSED");
                         proxy.close();
                         done();
                     });
@@ -78,10 +81,258 @@ describe("Proxy test", () => {
                     }, () => {}).end();
                 });
             });
+            describe("using the ws-incoming passes", () => {
+                it("should proxy the websockets stream", done => {
+                    const ports = {source: gen.port, proxy: gen.port};
+                    const proxy = httpProxy({
+                        target: `ws://127.0.0.1:${ports.source}`,
+                        ws: true
+                    }).listen(ports.proxy);
+                    const destiny = new ws.Server({port: ports.source}, () => {
+                        const client = new ws(`ws://127.0.0.1:${ports.proxy}`);
+                        client.on("open", () => {
+                            client.send("hello there");
+                        });
+                        client.on("message", msg => {
+                            assert.strictEqual(msg.toString(), "Hello over websockets");
+                            client.close();
+                            proxy.close();
+                            destiny.close();
+                            done();
+                        });
+                    });
+                    destiny.on("connection", socket => {
+                        socket.on("message", msg => {
+                            assert.strictEqual(msg.toString(), "hello there");
+                            socket.send("Hello over websockets");
+                        });
+                    });
+                });
+                it("should emit error on proxy error", done => {
+                    const ports = { source: gen.port, proxy: gen.port };
+                    const proxy = httpProxy({
+                        // note: we don't ever listen on this port
+                        target: `ws://127.0.0.1:${ports.source}`,
+                        ws: true
+                    }).listen(ports.proxy);
+
+                    const client = new ws(`ws://127.0.0.1:${ports.proxy}`);
+
+                    client.on("open", () => {
+                        client.send("hello there");
+                    });
+
+                    let count = 0;
+
+                    function maybe_done () {
+                        count += 1;
+                        if (count === 2) done();
+                    }
+
+                    client.on("error", err => {
+                        assert.strictEqual(err instanceof Error, true);
+                        assert.strictEqual(err.code, "ECONNRESET");
+                        maybe_done();
+                    });
+
+                    proxy.on("error", err => {
+                        assert.strictEqual(err instanceof Error, true);
+                        assert.strictEqual(err.code, "ECONNREFUSED");
+                        proxy.close();
+                        maybe_done();
+                    });
+                });
+                it("should close client socket if upstream is closed before upgrade", done => {
+                    const ports = { source: gen.port, proxy: gen.port };
+                    const server = http.createServer();
+                    server.on("upgrade", (req, socket, head) => {
+                        const response = ["HTTP/1.1 404 Not Found", "Content-type: text/html", '', ''];
+                        socket.write(response.join("\r\n"));
+                        socket.end();
+                    });
+                    server.listen(ports.source);
+
+                    const proxy = httpProxy({
+                        // note: we don't ever listen on this port
+                        target: `ws://127.0.0.1:${ports.source}`,
+                        ws: true
+                    }).listen(ports.proxy);
+                    const client = new ws(`ws://127.0.0.1:${ports.proxy}`);
+
+                    client.on("open", function () {
+                        client.send("hello there");
+                    });
+
+                    client.on("error", function (err) {
+                        assert.strictEqual(err instanceof Error, true);
+                        proxy.close();
+                        done();
+                    });
+                });
+                it("should proxy a socket.io stream", () => {
+                });
+                it("should emit open and close events when socket.io client connects and disconnects", () => {
+                });
+                it("should pass all set-cookie headers to client", () => {
+                });
+                it("should detect a proxyReq event and modify headers", function (done) {
+                    const ports = { source: gen.port, proxy: gen.port };
+
+                    const proxy = httpProxy({
+                        target: `ws://127.0.0.1:${ports.source}`,
+                        ws: true
+                    });
+                    proxy.on("proxyReqWs", (proxyReq, req, socket, options, head) => {
+                        proxyReq.setHeader("X-Special-Proxy-Header", "foobar");
+                    });
+                    const proxyServer = proxy.listen(ports.proxy);
+
+                    const destiny = new ws.Server({ port: ports.source }, () => {
+                        const client = new ws(`ws://127.0.0.1:${ports.proxy}`);
+
+                        client.on("open", () => {
+                            client.send("hello there");
+                        });
+
+                        client.on("message", msg => {
+                            assert.strictEqual(msg.toString(), "Hello over websockets");
+                            client.close();
+                            proxyServer.close();
+                            destiny.close();
+                            done();
+                        });
+                    });
+
+                    destiny.on("connection", (socket, upgradeReq) => {
+                        assert.strictEqual(upgradeReq.headers["x-special-proxy-header"], "foobar");
+
+                        socket.on("message", msg => {
+                            assert.strictEqual(msg.toString(), "hello there");
+                            socket.send("Hello over websockets");
+                        });
+                    });
+                });
+                it("should forward frames with single frame payload", done => {
+                    const payload = Array(65529).join("0");
+                    const ports = { source: gen.port, proxy: gen.port };
+                    const proxy = httpProxy({
+                        target: `ws://127.0.0.1:${ports.source}`,
+                        ws: true
+                    }).listen(ports.proxy);
+                    const destiny = new ws.Server({port: ports.source}, () => {
+                        const client = new ws(`ws://127.0.0.1:${ports.proxy}`);
+
+                        client.on("open", () => {
+                            client.send(payload);
+                        });
+
+                        client.on("message", msg => {
+                            assert.strictEqual(msg.toString(), "Hello over websockets");
+                            client.close();
+                            proxy.close();
+                            destiny.close();
+                            done();
+                        });
+                    });
+
+                    destiny.on("connection", socket => {
+                        socket.on("message", msg => {
+                            assert.strictEqual(msg.toString(), payload);
+                            socket.send("Hello over websockets");
+                        });
+                    });
+                });
+            });
         });
     });
     describe("https proxy module test", () => {
+        let initialPort = 1024, gen = {};
+        Object.defineProperty(gen, "port", { get: () => initialPort++ });
+        describe("HTTPS to HTTP", function () {
+            it("should proxy the request en send back the response", function (done) {
+                const ports = { source: gen.port, proxy: gen.port };
+                const source = http.createServer(function(req, res) {
+                    assert.strictEqual(req.method, "GET");
+                    assert.equal(req.headers.host.split(":")[1], ports.proxy);
+                    res.writeHead(200, { "Content-Type": "text/plain" });
+                    res.end("Hello from " + ports.source);
+                }).listen(ports.source);
 
+                const proxy = httpProxy({
+                    target: `http://127.0.0.1:${ports.source}`,
+                    ssl: {
+                        key: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-key.pem")),
+                        cert: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-cert.pem")),
+                        ciphers: "AES128-GCM-SHA256",
+                    }
+                }).listen(ports.proxy);
+
+                https.request({
+                    host: "localhost",
+                    port: ports.proxy,
+                    path: "/",
+                    method: "GET",
+                    rejectUnauthorized: false
+                }, res => {
+                    assert.strictEqual(res.statusCode, 200);
+
+                    res.on("data", data => {
+                        assert.strictEqual(data.toString(), "Hello from " + ports.source);
+                    });
+
+                    res.on("end", () => {
+                        source.close();
+                        proxy.close();
+                        done();
+                    })
+                }).end();
+            })
+        });
+        describe("HTTPS to HTTPS", () => {
+            it("should proxy the request en send back the response", done => {
+                const ports = { source: gen.port, proxy: gen.port };
+                const source = https.createServer({
+                    key: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-key.pem")),
+                    cert: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-cert.pem")),
+                    ciphers: "AES128-GCM-SHA256",
+                }, (req, res) => {
+                    assert.strictEqual(req.method, "GET");
+                    assert.equal(req.headers.host.split(":")[1], ports.proxy);
+                    res.writeHead(200, { "Content-Type": "text/plain" });
+                    res.end("Hello from " + ports.source);
+                }).listen(ports.source);
+
+                const proxy = httpProxy({
+                    target: `https://127.0.0.1:${ports.source}`,
+                    ssl: {
+                        key: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-key.pem")),
+                        cert: fs.readFileSync(path.join(__dirname, "fixtures", "agent2-cert.pem")),
+                        ciphers: "AES128-GCM-SHA256",
+                    },
+                    secure: false
+                }).listen(ports.proxy);
+
+                https.request({
+                    host: "localhost",
+                    port: ports.proxy,
+                    path: "/",
+                    method: "GET",
+                    rejectUnauthorized: false
+                }, res => {
+                    assert.strictEqual(res.statusCode, 200);
+
+                    res.on("data", data => {
+                        assert.strictEqual(data.toString(), "Hello from " + ports.source);
+                    });
+
+                    res.on("end", () => {
+                        source.close();
+                        proxy.close();
+                        done();
+                    })
+                }).end();
+            });
+        });
     });
     describe("web incoming module test", () => {
         const webPasses = require("../plugins/proxy/web.in.js");

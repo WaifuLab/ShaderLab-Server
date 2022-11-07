@@ -1,6 +1,6 @@
 const { parse } = require("node:url");
 
-const upgradeHeader = /(^|,)\s*upgrade\s*($|,)/i;
+const UPGRADE_HEADER = /(^|,)\s*upgrade\s*($|,)/i;
 
 const shared = {
     isSSL: /^https|wss/,
@@ -16,7 +16,8 @@ const shared = {
      * @return {object} Outgoing Object with all required properties set
      */
     setupOutgoing(outgoing, options, req, forward) {
-        outgoing.port = options[forward || "target"].port || (shared.isSSL.test(options[forward || "target"].protocol) ? 443 : 80);
+        outgoing.port = options[forward || "target"].port ||
+                        (shared.isSSL.test(options[forward || "target"].protocol) ? 443 : 80);
         ["host", "hostname", "socketPath", "pfx", "key", "passphrase", "cert",
             "ca", "ciphers", "secureProtocol"].forEach(e => outgoing[e] = options[forward || "target"][e]);
 
@@ -37,7 +38,7 @@ const shared = {
 
         if (!outgoing.agent) {
             outgoing.headers = outgoing.headers || {};
-            if (typeof outgoing.headers.connection !== "string" || !upgradeHeader.test(outgoing.headers.connection)) {
+            if (typeof outgoing.headers.connection !== "string" || !UPGRADE_HEADER.test(outgoing.headers.connection)) {
                 outgoing.headers.connection = "close";
             }
         }
@@ -52,19 +53,8 @@ const shared = {
         outgoing.path = shared.urlJoin(targetPath, outgoingPath);
 
         if (options.changeOrigin) {
-            function required(port, protocol) {
-                if (!port) return false;
-                switch (protocol) {
-                    case "http":  case "ws":  return port !== 80;
-                    case "https": case "wss": return port !== 443;
-                    case "ftp":               return port !== 21;
-                    case "gopher":            return port !== 70;
-                    case "file":              return false;
-                }
-                return port !== 0;
-            }
             outgoing.headers.host =
-                required(+outgoing.port, options[forward || "target"].protocol.split(":")[0]) && !hasPort(outgoing.host)
+                required(outgoing.port, options[forward || "target"].protocol) && !hasPort(outgoing.host)
                     ? outgoing.host + ":" + outgoing.port : outgoing.host;
         }
         return outgoing;
@@ -123,10 +113,10 @@ const shared = {
      */
     rewriteCookieProperty(header, config, property) {
         return Array.isArray(header)
-            ? header.map(function(headerElement) {
+            ? header.map(headerElement => {
                 return shared.rewriteCookieProperty(headerElement, config, property);
             })
-            : header.replace(new RegExp("(;\\s*" + property + "=)([^;]+)", "i"), function (match, prefix, previousValue) {
+            : header.replace(new RegExp("(;\\s*" + property + "=)([^;]+)", "i"), (match, prefix, previousValue) => {
                 let newValue;
                 if (previousValue in config) {
                     newValue = config[previousValue];
@@ -144,6 +134,19 @@ const shared = {
  */
 function hasPort(host) {
     return !!~host.indexOf(":");
+}
+
+function required(port, protocol) {
+    port = +port;
+    if (!port) return false;
+    switch (protocol.split(":")[0]) {
+        case "http":    case "ws":  return port !== 80;
+        case "https":   case "wss": return port !== 443;
+        case "ftp":                 return port !== 21;
+        case "gopher":              return port !== 70;
+        case "file":                return false;
+    }
+    return port !== 0;
 }
 
 module.exports = shared;

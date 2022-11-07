@@ -6,8 +6,8 @@ const JsonSocket = require("json-socket");
 const eventEmitter = new EventEmitter();
 
 const defaultOptions = {
-    tcpPortToMaster: 10555,
-    tcpPortFromMaster: 10556,
+    tcpPortToMaster: 10565,
+    tcpPortFromMaster: 10656,
     tcpIp: "127.0.0.1",
     verbose: false /*debug feature*/
 };

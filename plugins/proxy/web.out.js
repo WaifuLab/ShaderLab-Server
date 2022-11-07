@@ -1,7 +1,7 @@
 const { parse } = require("node:url");
 const shared = require("./shared.js");
 
-const redirectRegex = /^201|30([1278])$/;
+const REDIRECT_REGEX = /^201|30([1278])$/;
 
 module.exports = {
     /**
@@ -35,7 +35,7 @@ module.exports = {
      */
     setRedirectHostRewrite(req, res, proxyRes, options) {
         if ((options.hostRewrite || options.autoRewrite || options.protocolRewrite) &&
-            proxyRes.headers["location"] && redirectRegex.test(proxyRes.statusCode)) {
+            proxyRes.headers["location"] && REDIRECT_REGEX.test(proxyRes.statusCode)) {
             const target = parse(options.target);
             const url = parse(proxyRes.headers["location"]);
             // make sure the redirected host matches the target host before rewriting

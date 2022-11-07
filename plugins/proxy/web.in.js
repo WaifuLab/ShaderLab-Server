@@ -80,7 +80,7 @@ module.exports = {
             forwardReq.on("error", forwardError);
 
             pipeline(options.buffer || req, forwardReq, () => {});
-            if(!options.target) { return res.end(); }
+            if (!options.target) return res.end();
         }
 
         // Request initalization
@@ -89,7 +89,7 @@ module.exports = {
 
         // Enable developers to modify the proxyReq before headers are sent
         proxyReq.on("socket", function(socket) {
-            if(server && !proxyReq.getHeader("expect")) {
+            if (server && !proxyReq.getHeader("expect")) {
                 server.emit("proxyReq", proxyReq, req, res, options);
             }
         });
@@ -103,7 +103,7 @@ module.exports = {
         }
 
         // Ensure we abort proxy if request is aborted
-        req.on("close", function() {
+        res.on("close", function() {
             if (!res.writableFinished)
                 proxyReq.destroy();
         });
@@ -129,7 +129,7 @@ module.exports = {
 
         pipeline(options.buffer || req, proxyReq, () => {});
 
-        proxyReq.on("response", function(proxyRes) {
+        proxyReq.on("response", proxyRes => {
             if(server) server.emit("proxyRes", proxyRes, req, res);
 
             if(!res.headersSent && !options.selfHandleResponse) {
@@ -140,7 +140,7 @@ module.exports = {
 
             if (!res.finished) {
                 // Allow us to listen when the proxy has completed
-                proxyRes.on("end", function() {
+                proxyRes.on("end", () => {
                     if (server) server.emit("end", req, res, proxyRes);
                 });
                 // We pipe to the response unless its expected to be handled by the user

@@ -3,7 +3,7 @@ const cluster = require("node:cluster");
 const { formatSize } = require("../../utils/size.js");
 const events = require("../../plugins/thread/events.js");
 
-const max = 100;
+const max = 10000;
 const myName = process.env.FORKNAME;
 
 let received = 0, dataSent, counter, data;
